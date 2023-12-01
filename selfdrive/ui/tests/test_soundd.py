@@ -16,7 +16,7 @@ def test_soundd():
 
   pm = messaging.PubMaster(['controlsState', 'microphone'])
 
-  sound_to_play = [AudibleAlert.engage, AudibleAlert.disengage, AudibleAlert.promptDistracted, AudibleAlert.refuse, AudibleAlert.prompt, \
+  sound_to_play = [AudibleAlert.engage, AudibleAlert.disengage, AudibleAlert.refuse, AudibleAlert.prompt, \
                    AudibleAlert.promptRepeat, AudibleAlert.promptDistracted, AudibleAlert.warningSoft, AudibleAlert.warningImmediate]
 
   SOUND_PLAY_TIME = 5 # 5 seconds
