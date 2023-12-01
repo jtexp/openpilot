@@ -85,7 +85,8 @@ class Soundd:
       self.current_sound_frame = 0
 
   def calculate_volume(self, weighted_db):
-    return ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
+    volume = ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
+    return np.clip(volume, MIN_VOLUME, MAX_VOLUME)
 
   def main(self):
     import sounddevice as sd
