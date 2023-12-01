@@ -57,28 +57,29 @@ class Soundd:
       self.loaded_sounds[sound] = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / 32767
 
   def get_sound_data(self, frames): # get "frames" worth of data from the current alert sound, looping when required
-    num_loops = sound_list[self.current_alert][1]
-    sound_data = self.loaded_sounds[self.current_alert]
 
     ret = np.zeros(frames, dtype=np.float32)
-    written_frames = 0
 
-    current_sound_frame = self.current_sound_frame % len(sound_data)
-    loops = self.current_sound_frame // len(sound_data)
+    if self.current_alert != AudibleAlert.none:
+      num_loops = sound_list[self.current_alert][1]
+      sound_data = self.loaded_sounds[self.current_alert]
+      written_frames = 0
 
-    while written_frames < frames and (num_loops is None or loops < num_loops):
-      available_frames = sound_data.shape[0] - current_sound_frame
-      frames_to_write = min(available_frames, frames - written_frames)
-      ret[written_frames:written_frames+frames_to_write] = sound_data[current_sound_frame:current_sound_frame+frames_to_write]
-      written_frames += frames_to_write
-      self.current_sound_frame += frames_to_write
+      current_sound_frame = self.current_sound_frame % len(sound_data)
+      loops = self.current_sound_frame // len(sound_data)
+
+      while written_frames < frames and (num_loops is None or loops < num_loops):
+        available_frames = sound_data.shape[0] - current_sound_frame
+        frames_to_write = min(available_frames, frames - written_frames)
+        ret[written_frames:written_frames+frames_to_write] = sound_data[current_sound_frame:current_sound_frame+frames_to_write]
+        written_frames += frames_to_write
+        self.current_sound_frame += frames_to_write
 
     return ret * self.current_volume
 
   def stream_callback(self, data_out: np.ndarray, frames: int, time, status) -> None:
     assert not status
-    if self.current_alert != AudibleAlert.none:
-      data_out[:frames, 0] = self.get_sound_data(frames)
+    data_out[:frames, 0] = self.get_sound_data(frames)
 
   def new_alert(self, alert):
     if self.current_alert != alert:
