@@ -10,6 +10,9 @@ SAMPLE_RATE = 48000
 MAX_VOLUME = 1.0
 MIN_VOLUME = 0.1
 
+AMBIENT_DB = 30 # DB where MIN_VOLUME is applied
+DB_SCALE = 30 # AMBIENT_DB + DB_SCALE is where MAX_VOLUME is applied
+
 AudibleAlert = car.CarControl.HUDControl.AudibleAlert
 
 
@@ -81,6 +84,9 @@ class Soundd:
       self.current_alert = alert
       self.current_sound_frame = 0
 
+  def calculate_volume(self, weighted_db):
+    return ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
+
   def main(self):
     import sounddevice as sd
 
@@ -95,7 +101,7 @@ class Soundd:
           self.new_alert(new_alert)
 
         if sm.updated['microphone']:
-          self.current_volume = np.clip(((sm["microphone"].soundPressureWeightedDb - 30) / 30) * MAX_VOLUME, MIN_VOLUME, MAX_VOLUME)
+          self.current_volume = self.calculate_volume(sm["microphone"].soundPressureWeightedDb)
 
 
 def main():
