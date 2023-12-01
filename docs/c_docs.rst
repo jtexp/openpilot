@@ -43,12 +43,6 @@ ui
 .. autodoxygenindex::
    :project: selfdrive_ui
 
-soundd
-""""""
-.. autodoxygenindex::
-   :project: selfdrive_ui_soundd
-
-
 replay
 """"""
 .. autodoxygenindex::

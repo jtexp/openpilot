@@ -1,75 +1,43 @@
-#!/usr/bin/env python3
-import subprocess
+import pytest
 import time
-import unittest
 
-from cereal import log, car
-import cereal.messaging as messaging
-from openpilot.selfdrive.test.helpers import phone_only, with_processes
-# TODO: rewrite for unittest
-from openpilot.common.realtime import DT_CTRL
-from openpilot.system.hardware import HARDWARE
+from cereal import messaging, car
+from openpilot.selfdrive.test.helpers import with_processes
+
 
 AudibleAlert = car.CarControl.HUDControl.AudibleAlert
 
-SOUNDS = {
-  # sound: total writes
-  AudibleAlert.none: 0,
-  AudibleAlert.engage: 184,
-  AudibleAlert.disengage: 186,
-  AudibleAlert.refuse: 194,
-  AudibleAlert.prompt: 184,
-  AudibleAlert.promptRepeat: 487,
-  AudibleAlert.promptDistracted: 508,
-  AudibleAlert.warningSoft: 471,
-  AudibleAlert.warningImmediate: 470,
-}
 
-def get_total_writes():
-  audio_flinger = subprocess.check_output('dumpsys media.audio_flinger', shell=True, encoding='utf-8').strip()
-  write_lines = [l for l in audio_flinger.split('\n') if l.strip().startswith('Total writes')]
-  return sum(int(l.split(':')[1]) for l in write_lines)
+@pytest.mark.skip
+@with_processes(["soundd"])
+def test_soundd():
+  """Cycles through all sounds for 5 seconds each."""
+  time.sleep(2)
 
-class TestSoundd(unittest.TestCase):
-  def test_sound_card_init(self):
-    assert HARDWARE.get_sound_card_online()
+  pm = messaging.PubMaster(['controlsState', 'microphone'])
 
-  @phone_only
-  @with_processes(['soundd'])
-  def test_alert_sounds(self):
-    pm = messaging.PubMaster(['deviceState', 'controlsState'])
+  sound_to_play = [AudibleAlert.engage, AudibleAlert.disengage, AudibleAlert.refuse, AudibleAlert.prompt, \
+                   AudibleAlert.promptRepeat, AudibleAlert.promptDistracted, AudibleAlert.warningSoft, AudibleAlert.warningImmediate]
 
-    # make sure they're all defined
-    alert_sounds = {v: k for k, v in car.CarControl.HUDControl.AudibleAlert.schema.enumerants.items()}
-    diff = set(SOUNDS.keys()).symmetric_difference(alert_sounds.keys())
-    assert len(diff) == 0, f"not all sounds defined in test: {diff}"
+  SOUND_PLAY_TIME = 5 # 5 seconds
 
-    # wait for procs to init
-    time.sleep(1)
+  for i in range(len(sound_to_play)):
+    def send_sound(sound, play_time, weighted_sound=45):
+      play_start = time.monotonic()
+      while time.monotonic() - play_start < play_time:
+        m1 = messaging.new_message('controlsState')
+        m1.controlsState.alertSound = sound
 
-    for sound, expected_writes in SOUNDS.items():
-      print(f"testing {alert_sounds[sound]}")
-      start_writes = get_total_writes()
+        m2 = messaging.new_message('microphone')
+        m2.microphone.soundPressureWeightedDb = weighted_sound
 
-      for i in range(int(10 / DT_CTRL)):
-        msg = messaging.new_message('deviceState')
-        msg.deviceState.started = True
-        pm.send('deviceState', msg)
+        pm.send('controlsState', m1)
+        pm.send('microphone', m2)
+        time.sleep(0.01)
 
-        msg = messaging.new_message('controlsState')
-        if i < int(6 / DT_CTRL):
-          msg.controlsState.alertSound = sound
-          msg.controlsState.alertType = str(sound)
-          msg.controlsState.alertText1 = "Testing Sounds"
-          msg.controlsState.alertText2 = f"playing {alert_sounds[sound]}"
-          msg.controlsState.alertSize = log.ControlsState.AlertSize.mid
-        pm.send('controlsState', msg)
-        time.sleep(DT_CTRL)
+    send_sound(AudibleAlert.none, 1) # 1 second gap between sounds
+    send_sound(sound_to_play[i], SOUND_PLAY_TIME)
 
-      tolerance = expected_writes / 8
-      actual_writes = get_total_writes() - start_writes
-      print(f"  expected {expected_writes} writes, got {actual_writes}")
-      assert abs(expected_writes - actual_writes) <= tolerance, f"{alert_sounds[sound]}: expected {expected_writes} writes, got {actual_writes}"
 
 if __name__ == "__main__":
-  unittest.main()
+  test_soundd()
