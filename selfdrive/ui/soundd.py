@@ -8,6 +8,7 @@ from openpilot.common.basedir import BASEDIR
 
 SAMPLE_RATE = 48000
 MAX_VOLUME = 1.0
+MIN_VOLUME = 0.1
 
 AudibleAlert = car.CarControl.HUDControl.AudibleAlert
 
@@ -94,7 +95,7 @@ class Soundd:
           self.new_alert(new_alert)
 
         if sm.updated['microphone']:
-          self.current_volume = ((sm["microphone"].soundPressureWeightedDb - 30) / 30) * MAX_VOLUME
+          self.current_volume = np.clip(((sm["microphone"].soundPressureWeightedDb - 30) / 30) * MAX_VOLUME, MIN_VOLUME, MAX_VOLUME)
 
 
 def main():
