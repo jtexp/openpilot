@@ -7,10 +7,10 @@ from cereal import car, messaging
 from openpilot.common.basedir import BASEDIR
 
 SAMPLE_RATE = 48000
+MAX_VOLUME = 1.0
 
 AudibleAlert = car.CarControl.HUDControl.AudibleAlert
 
-MAX_VOLUME = 1.0
 
 sound_list: Dict[int, Tuple[str, Optional[int], float]] = {
   # AudibleAlert, file name, play count (none for infinite)
@@ -26,50 +26,80 @@ sound_list: Dict[int, Tuple[str, Optional[int], float]] = {
   AudibleAlert.warningImmediate: ("warning_immediate.wav", None, MAX_VOLUME),
 }
 
-loaded_sounds: Dict[int, np.ndarray] = {}
 
-# Load all sounds
-for sound in sound_list:
-  filename, play_count, volume = sound_list[sound]
+class Soundd:
+  def __init__(self):
+    self.load_sounds()
 
-  wavefile = wave.open(BASEDIR + "/selfdrive/assets/sounds/" + filename, 'r')
+    self.current_alert = AudibleAlert.none
+    self.current_volume = MAX_VOLUME
+    self.current_sound_frame = 0
+  
+  def load_sounds(self):
+    self.loaded_sounds: Dict[int, np.ndarray] = {}
 
-  assert wavefile.getnchannels() == 1
-  assert wavefile.getsampwidth() == 2
-  assert wavefile.getframerate() == SAMPLE_RATE
+    # Load all sounds
+    for sound in sound_list:
+      filename, play_count, volume = sound_list[sound]
 
-  length = wavefile.getnframes()
-  sound_data = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / 32767
+      wavefile = wave.open(BASEDIR + "/selfdrive/assets/sounds/" + filename, 'r')
 
-  loaded_sounds[sound] = sound_data
+      assert wavefile.getnchannels() == 1
+      assert wavefile.getsampwidth() == 2
+      assert wavefile.getframerate() == SAMPLE_RATE
+
+      length = wavefile.getnframes()
+      self.loaded_sounds[sound] = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / 32767
+  
+  def get_sound_data(self, frames): # get "frames" worth of data from the current alert sound, looping when required
+    num_loops = sound_list[self.current_alert][1]
+    sound_data = self.loaded_sounds[self.current_alert]
+
+    ret = np.zeros(frames, dtype=np.float32)
+    written_frames = 0
+
+    current_sound_frame = self.current_sound_frame % len(sound_data)
+    loops = self.current_sound_frame // len(sound_data)
+
+    while written_frames < frames and (num_loops is None or loops < num_loops):
+      available_frames = sound_data.shape[0] - current_sound_frame
+      frames_to_write = min(available_frames, frames - written_frames)
+      ret[written_frames:written_frames+frames_to_write] = sound_data[current_sound_frame:current_sound_frame+frames_to_write]
+      written_frames += frames_to_write
+      self.current_sound_frame += frames_to_write
+    
+    return ret * self.current_volume
+  
+  def stream_callback(self, data_out: np.ndarray, frames: int, time, status) -> None:
+    assert not status
+    if self.current_alert != AudibleAlert.none:
+      data_out[:frames, 0] = self.get_sound_data(frames)
+  
+  def new_alert(self, alert):
+    if self.current_alert != alert:
+      self.current_alert = alert
+      self.current_sound_frame = 0
+
+  def main(self):
+    import sounddevice as sd
+
+    sm = messaging.SubMaster(['controlsState', 'microphone'])
+
+    with sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.stream_callback) as stream:
+      while True:
+        sm.update(timeout=1000)
+
+        if sm.updated['controlsState']:
+          new_alert = sm['controlsState'].alertSound.raw
+          self.new_alert(new_alert)
+
+        if sm.updated['microphone']:
+          self.current_volume = ((sm["microphone"].soundPressureWeightedDb - 30) / 30) * MAX_VOLUME
 
 
 def main():
-  import sounddevice as sd
-  sm = messaging.SubMaster(['controlsState', 'microphone'])
-
-  current_alert = AudibleAlert.none
-  current_alert_looped = 0
-  current_volume = MAX_VOLUME
-
-  with sd.OutputStream(channels=1, samplerate=SAMPLE_RATE) as stream:
-    while True:
-      sm.update(timeout=1000)
-
-      if sm.updated['controlsState']:
-        new_alert = sm['controlsState'].alertSound.raw
-        if current_alert != new_alert:
-          current_alert = new_alert
-          current_alert_looped = 0
-
-      if sm.updated['microphone']:
-        current_volume = (sm["microphone"].soundPressureWeightedDb - 30) / 30
-
-      if current_alert != AudibleAlert.none:
-        num_loops = sound_list[current_alert][1]
-        if num_loops is None or current_alert_looped < num_loops:
-          stream.write(loaded_sounds[current_alert] * current_volume)
-          current_alert_looped += 1
+  s = Soundd()
+  s.main()
 
 
 if __name__ == "__main__":
