@@ -102,7 +102,7 @@ class Soundd:
           self.new_alert(new_alert)
 
         if sm.updated['microphone']:
-          self.current_volume = self.calculate_volume(sm["microphone"].soundPressureWeightedDb)
+          self.current_volume = self.calculate_volume(sm["microphone"].filteredSoundPressureWeightedDb)
 
 
 def main():

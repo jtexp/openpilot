@@ -29,7 +29,7 @@ def test_soundd():
         m1.controlsState.alertSound = sound
 
         m2 = messaging.new_message('microphone')
-        m2.microphone.soundPressureWeightedDb = weighted_sound
+        m2.microphone.filteredSoundPressureWeightedDb = weighted_sound
 
         pm.send('controlsState', m1)
         pm.send('microphone', m2)
