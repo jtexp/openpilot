@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import wave
 
@@ -86,7 +87,7 @@ class Soundd:
 
   def calculate_volume(self, weighted_db):
     volume = ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
-    return np.clip(volume, MIN_VOLUME, MAX_VOLUME)
+    return math.log2(np.clip(volume, MIN_VOLUME, MAX_VOLUME) + 1)
 
   def main(self):
     import sounddevice as sd
