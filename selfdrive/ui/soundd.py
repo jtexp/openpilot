@@ -38,7 +38,7 @@ class Soundd:
     self.current_alert = AudibleAlert.none
     self.current_volume = MAX_VOLUME
     self.current_sound_frame = 0
-  
+
   def load_sounds(self):
     self.loaded_sounds: Dict[int, np.ndarray] = {}
 
@@ -54,7 +54,7 @@ class Soundd:
 
       length = wavefile.getnframes()
       self.loaded_sounds[sound] = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / 32767
-  
+
   def get_sound_data(self, frames): # get "frames" worth of data from the current alert sound, looping when required
     num_loops = sound_list[self.current_alert][1]
     sound_data = self.loaded_sounds[self.current_alert]
@@ -71,14 +71,14 @@ class Soundd:
       ret[written_frames:written_frames+frames_to_write] = sound_data[current_sound_frame:current_sound_frame+frames_to_write]
       written_frames += frames_to_write
       self.current_sound_frame += frames_to_write
-    
+
     return ret * self.current_volume
-  
+
   def stream_callback(self, data_out: np.ndarray, frames: int, time, status) -> None:
     assert not status
     if self.current_alert != AudibleAlert.none:
       data_out[:frames, 0] = self.get_sound_data(frames)
-  
+
   def new_alert(self, alert):
     if self.current_alert != alert:
       self.current_alert = alert
@@ -92,7 +92,7 @@ class Soundd:
 
     sm = messaging.SubMaster(['controlsState', 'microphone'])
 
-    with sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.stream_callback) as stream:
+    with sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.stream_callback):
       while True:
         sm.update(timeout=1000)
 
